@@ -184,8 +184,8 @@ async function fetchOdds(apiKey){
     const sport=SPORTS[si];
     S.progress=`Scanning ${sport.name} (h2h)... (${si+1}/${SPORTS.length})`;render();
     try{
-      // 1) Fetch h2h
-      const r1=await safeFetch(`${API_BASE}/sports/${sport.key}/odds?bookmakers=${booksParam}&oddsFormat=decimal&markets=h2h&apiKey=${apiKey}`);
+      // 1) Fetch h2h — use regions instead of bookmakers to see what's available
+      const r1=await safeFetch(`${API_BASE}/sports/${sport.key}/odds?regions=eu,uk&oddsFormat=decimal&markets=h2h&apiKey=${apiKey}`);
       if(!r1){continue;}
       if(!r1.ok){
         if(r1.status===401){S.status='❌ Invalid API key. Check and try again.';S.statusType='err';S.loading=false;render();return}
@@ -206,19 +206,18 @@ async function fetchOdds(apiKey){
       // 2) Fetch totals (separate call, may fail — that's ok)
       S.progress=`Scanning ${sport.name} (totals)... (${si+1}/${SPORTS.length})`;render();
       let d2=[];
-      const r2=await safeFetch(`${API_BASE}/sports/${sport.key}/odds?bookmakers=${booksParam}&oddsFormat=decimal&markets=totals&apiKey=${apiKey}`);
+      const r2=await safeFetch(`${API_BASE}/sports/${sport.key}/odds?regions=eu,uk&oddsFormat=decimal&markets=totals&apiKey=${apiKey}`);
       if(r2&&r2.ok){d2=await r2.json();S.creditsUsed=parseInt(r2.headers.get('x-requests-used'))||S.creditsUsed;S.creditsRemaining=parseInt(r2.headers.get('x-requests-remaining'))||S.creditsRemaining;}
 
       // Build totals map by event id
       const tMap={};
-      d2.forEach(ev=>{const t={};ev.bookmakers.forEach(bk=>{if(!MY_BOOKS.includes(bk.key))return;const mt=bk.markets.find(m=>m.key==='totals');if(!mt)return;mt.outcomes.forEach(o=>{if(!t[o.point])t[o.point]={};if(!t[o.point][bk.key])t[o.point][bk.key]={};t[o.point][bk.key][o.name.toLowerCase()]=o.price;});});tMap[ev.id]=t;});
+      d2.forEach(ev=>{const t={};ev.bookmakers.forEach(bk=>{const mt=bk.markets.find(m=>m.key==='totals');if(!mt)return;mt.outcomes.forEach(o=>{if(!t[o.point])t[o.point]={};if(!t[o.point][bk.key])t[o.point][bk.key]={};t[o.point][bk.key][o.name.toLowerCase()]=o.price;});});tMap[ev.id]=t;});
 
       // Process h2h data
       d1.forEach(ev=>{
         if(!ev.bookmakers||ev.bookmakers.length<2)return;
         const h2h={},totals=tMap[ev.id]||{},spreads={};
         ev.bookmakers.forEach(bk=>{
-          if(!MY_BOOKS.includes(bk.key))return;
           const mH=bk.markets.find(m=>m.key==='h2h');
           if(mH){
             const hO=mH.outcomes.find(o=>o.name===ev.home_team);
