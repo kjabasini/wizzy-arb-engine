@@ -382,18 +382,38 @@ function render(){
     const tm=m.kickoff.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
     const tbc=arb.type==='3way'?'t3':arb.type==='ou'?'tou':'tah';
 
+    // PRE-CALCULATE stakes for every card
+    const st=cStakes(arb,S.bankroll),ts=st.reduce((s,x)=>s+x.stake,0),mp=Math.min(...st.map(s=>s.payout)),pr=mp-ts,roi=((pr/ts)*100).toFixed(2);
+
     h+=`<div class="acard g ${open?'sel':''}" data-k="${key}" style="animation-delay:${Math.min(i*.025,.5)}s">
       <div class="sh"></div>
       <div class="atop">
         <div style="display:flex;align-items:flex-start">
           <div class="arank">${i+1}</div>
-          <div><div class="amatch">${m.home[0]} <span style="color:var(--dim);font-weight:400">vs</span> ${m.away[0]}</div><div class="ameta">${m.league} • ${dt} ${tm}</div><div class="pair-tag">${pairDesc(arb)}</div></div>
+          <div><div class="amatch">${m.home[0]} <span style="color:var(--dim);font-weight:400">vs</span> ${m.away[0]}</div><div class="ameta">${m.league} • ${dt} ${tm}</div></div>
         </div>
-        <div><div class="amargin" style="color:${mclr(arb.margin)}">${arb.margin}%</div><div class="amargin-l">MARGIN</div></div>
+        <div style="text-align:right"><div class="amargin" style="color:${mclr(arb.margin)}">${arb.margin}%</div><div class="amargin-l">MARGIN</div></div>
       </div>
-      <div class="abets ${arb.best.length===3?'three':''}">
-        ${arb.best.map((b,bi)=>`<div class="abet">${badge(b.bm)}<div class="oname">${arb.outLabels[bi]}</div><div class="bodds" style="color:${bi===0?'var(--green)':bi===1?'var(--blue)':'var(--gold)'}">${b.odd}</div></div>`).join('')}
+
+      <!-- STAKE DISTRIBUTION - ALWAYS VISIBLE -->
+      <div style="background:var(--pbg);border:1px solid var(--pbd);border-radius:12px;padding:12px;margin-bottom:10px">
+        <div style="font-size:9px;color:var(--dim);letter-spacing:1.2px;margin-bottom:8px;text-align:center">💰 YOUR $${S.bankroll.toLocaleString()} DISTRIBUTION</div>
+        <div class="abets ${arb.best.length===3?'three':''}">
+          ${st.map((s,si)=>`<div class="abet" style="text-align:center;padding:8px">
+            ${badge(s.bm)}
+            <div class="oname">${s.label}</div>
+            <div style="font-family:var(--fontD);font-size:13px;font-weight:700;color:var(--text);margin-top:4px">Odds: ${s.odd}</div>
+            <div style="font-family:var(--fontD);font-size:20px;font-weight:800;color:var(--blue);margin-top:2px">$${s.stake.toLocaleString()}</div>
+            <div style="font-size:9px;color:var(--dim);margin-top:2px">wins → $${s.payout.toLocaleString()}</div>
+          </div>`).join('')}
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:10px;padding-top:10px;border-top:1px solid var(--gbr)">
+          <div style="text-align:center;flex:1"><div style="font-size:8px;color:var(--dim);letter-spacing:1px">TOTAL IN</div><div style="font-family:var(--fontD);font-size:16px;font-weight:700;color:var(--text)">$${ts.toFixed(0)}</div></div>
+          <div style="text-align:center;flex:1"><div style="font-size:8px;color:var(--dim);letter-spacing:1px">MIN RETURN</div><div style="font-family:var(--fontD);font-size:16px;font-weight:700;color:var(--blue)">$${mp.toFixed(0)}</div></div>
+          <div style="text-align:center;flex:1"><div style="font-size:8px;color:var(--dim);letter-spacing:1px">GUARANTEED</div><div style="font-family:var(--fontD);font-size:18px;font-weight:800;color:var(--green)">+$${pr.toFixed(2)}</div></div>
+        </div>
       </div>
+
       <div class="sig"><div class="sigdot" style="background:${sg.d};box-shadow:0 0 10px ${sg.d}55"></div><span class="sigl" style="color:${sg.c}">${sg.l}</span><span class="sigr">— ${sg.r}</span><span class="tbadge ${tbc}">${arb.type==='3way'?'🛡 3-WAY':arb.type==='ou'?'📊 O/U '+arb.point:'🎯 AH '+arb.handicap}</span></div>
     </div>`;
 
