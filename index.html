@@ -141,7 +141,7 @@
 <div class="header">
   <div class="logo-row">
     <div class="logo-icon">W</div>
-    <div><div class="logo-text">Wizzy <span>Arb Engine</span></div><div class="logo-sub">3-BOOK ARBITRAGE SCANNER</div></div>
+    <div><div class="logo-text">Wizzy <span>Arb Engine</span></div><div class="logo-sub">3-BOOK • ALL SPORTS</div></div>
   </div>
   <div class="hr">
     <div class="scan"><div class="sdot-h"></div> <span id="scanText">READY</span></div>
@@ -160,9 +160,27 @@ const BOOK_INFO = {
 };
 const API_BASE='https://api.the-odds-api.com/v4';
 const SPORTS=[
-  {key:'soccer_epl',name:'Premier League'},{key:'soccer_spain_la_liga',name:'La Liga'},
+  // Football
+  {key:'soccer_epl',name:'EPL'},{key:'soccer_spain_la_liga',name:'La Liga'},
   {key:'soccer_italy_serie_a',name:'Serie A'},{key:'soccer_germany_bundesliga',name:'Bundesliga'},
-  {key:'soccer_france_ligue_one',name:'Ligue 1'},{key:'soccer_uefa_champs_league',name:'Champions League'}
+  {key:'soccer_france_ligue_one',name:'Ligue 1'},{key:'soccer_uefa_champs_league',name:'Champions League'},
+  {key:'soccer_uefa_europa_league',name:'Europa League'},
+  // Basketball
+  {key:'basketball_nba',name:'NBA'},{key:'basketball_euroleague',name:'Euroleague'},
+  // Tennis
+  {key:'tennis_atp_french_open',name:'ATP Tennis'},{key:'tennis_wta_french_open',name:'WTA Tennis'},
+  // Hockey
+  {key:'icehockey_nhl',name:'NHL'},
+  // Baseball
+  {key:'baseball_mlb',name:'MLB'},
+  // MMA
+  {key:'mma_mixed_martial_arts',name:'MMA/UFC'},
+  // Cricket
+  {key:'cricket_ipl',name:'Cricket IPL'},
+  // Rugby
+  {key:'rugbyleague_nrl',name:'Rugby NRL'},
+  // Upcoming catch-all
+  {key:'upcoming',name:'Next 8 (All Sports)'}
 ];
 
 let S={apiKey:localStorage.getItem('wizzy_key')||'',bankroll:1000,league:'All',mktType:'all',minMargin:0,sel:null,matches:[],loading:false,status:'',statusType:'',creditsUsed:0,creditsRemaining:500,isLive:false,guideOpen:true,progress:''};
@@ -349,7 +367,7 @@ function render(){
     ${S.creditsUsed>0?`<div class="credits-bar">Credits: ${S.creditsUsed}/${500} used <div class="credits-meter"><div class="credits-fill" style="width:${credPct}%;background:${credColor}"></div></div>${S.creditsRemaining} left</div>`:''}
   </div>
 
-  <div class="safety-info">⚽ <b>Smart Mode:</b> Scanning Pinnacle (sharp) vs 1XBet & Marathon (soft) — 🛡 3-Way + 📊 Over/Under + 🎯 Asian Handicap. All outcomes covered.</div>
+  <div class="safety-info">🏆 <b>Smart Mode:</b> Pinnacle (sharp) vs 1XBet & Marathon (soft) — All sports, all safe markets. Football: 3-Way + O/U. Basketball/Tennis/Others: 2-Way + O/U. All outcomes covered.</div>
 
   <div class="stats">
     ${[{l:'SAFE ARBS',v:tot,c:'var(--green)',s:S.matches.length+' matches × 3 markets'},{l:'BEST MARGIN',v:best?best.margin+'%':'—',c:'var(--gold)',s:best?best.match.home[0]+' v '+best.match.away[0]:''},{l:'AVG MARGIN',v:avg+'%',c:'var(--blue)',s:'across all arbs'},{l:'BANKROLL',v:'I',c:'var(--text)',s:'USD available'}].map((x,i)=>`
@@ -446,7 +464,7 @@ function render(){
     }
   });
 
-  h+=`</div><div class="footer">Wizzy Arb Engine v6.0 — 3 Book Edition<br>Pinnacle (Sharp) vs 1XBet & Marathon (Soft) • 6 Leagues • 3 Markets<br>${S.isLive?'Real odds from The Odds API':'Demo data'} • Powered by Claude AI</div>`;
+  h+=`</div><div class="footer">Wizzy Arb Engine v7.0 — All Sports Edition<br>Pinnacle • 1XBet • Marathon — Football, NBA, Tennis, NHL, MLB, MMA & more<br>${S.isLive?'Real odds from The Odds API':'Demo data'} • Powered by Claude AI</div>`;
 
   document.getElementById('app').innerHTML=h;
   document.getElementById('goBtn').onclick=()=>{const k=document.getElementById('apiKeyInput').value.trim();if(!k){S.status='👆 Paste API key first';S.statusType='err';render();return}fetchOdds(k)};
