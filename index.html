@@ -195,35 +195,35 @@ async function fetchOdds(apiKey){
 
   async function safeFetch(url){
     const ctrl=new AbortController();
-    const timer=setTimeout(()=>ctrl.abort(),12000);
+    const timer=setTimeout(()=>ctrl.abort(),8000);
     try{const r=await fetch(url,{signal:ctrl.signal});clearTimeout(timer);return r;}
     catch(e){clearTimeout(timer);return null;}
   }
 
   for(let si=0;si<SPORTS.length;si++){
     const sport=SPORTS[si];
-    S.progress=`Scanning ${sport.name} (h2h)... (${si+1}/${SPORTS.length})`;render();
+    S.progress=`Scanning ${sport.name}... (${si+1}/${SPORTS.length})`;render();
     try{
-      // 1) Fetch h2h — use regions instead of bookmakers to see what's available
-      const r1=await safeFetch(`${API_BASE}/sports/${sport.key}/odds?regions=eu,uk&oddsFormat=decimal&markets=h2h&apiKey=${apiKey}`);
-      if(!r1){continue;}
+      // Fetch h2h and totals IN PARALLEL (faster)
+      const [r1,r2]=await Promise.all([
+        safeFetch(`${API_BASE}/sports/${sport.key}/odds?regions=eu,uk&oddsFormat=decimal&markets=h2h&apiKey=${apiKey}`),
+        safeFetch(`${API_BASE}/sports/${sport.key}/odds?regions=eu,uk&oddsFormat=decimal&markets=totals&apiKey=${apiKey}`)
+      ]);
+
+      if(!r1)continue;
       if(!r1.ok){
-        if(r1.status===401){S.status='❌ Invalid API key. Check and try again.';S.statusType='err';S.loading=false;render();return}
-        if(r1.status===429){S.status='⏳ Rate limit — wait 1 min and retry';S.statusType='err';S.loading=false;render();return}
+        if(r1.status===401){S.status='❌ Invalid API key.';S.statusType='err';S.loading=false;render();return}
+        if(r1.status===429){S.status='⏳ Rate limit — wait 1 min';S.statusType='err';S.loading=false;render();return}
         continue;
       }
       S.creditsUsed=parseInt(r1.headers.get('x-requests-used'))||0;
       S.creditsRemaining=parseInt(r1.headers.get('x-requests-remaining'))||0;
       const d1=await r1.json();
 
-      // Show progress
-      S.progress=`Scanning ${sport.name}... (${si+1}/${SPORTS.length}) — ${d1.length} games found`;render();
-
-      // 2) Fetch totals (separate call, may fail — that's ok)
-      S.progress=`Scanning ${sport.name} (totals)... (${si+1}/${SPORTS.length})`;render();
       let d2=[];
-      const r2=await safeFetch(`${API_BASE}/sports/${sport.key}/odds?regions=eu,uk&oddsFormat=decimal&markets=totals&apiKey=${apiKey}`);
       if(r2&&r2.ok){d2=await r2.json();S.creditsUsed=parseInt(r2.headers.get('x-requests-used'))||S.creditsUsed;S.creditsRemaining=parseInt(r2.headers.get('x-requests-remaining'))||S.creditsRemaining;}
+
+      S.progress=`Scanning ${sport.name}... (${si+1}/${SPORTS.length}) — ${d1.length} games`;render();
 
       // Build totals map — ONLY YOUR 3 BOOKMAKERS
       const tMap={};
