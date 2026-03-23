@@ -173,7 +173,6 @@ document.getElementById('tog').onclick=()=>{const h=document.documentElement;h.d
 async function fetchOdds(apiKey){
   S.loading=true;S.matches=[];S.progress='Starting scan...';render();
   let allM=[];
-  const debugLog=[];
   // Using bookmakers param = only 1 region cost (≤10 books = 1 region)
   const booksParam=MY_BOOKS.join(',');
 
@@ -200,14 +199,8 @@ async function fetchOdds(apiKey){
       S.creditsRemaining=parseInt(r1.headers.get('x-requests-remaining'))||0;
       const d1=await r1.json();
 
-      // DEBUG: Track what the API actually returns
-      let debugBooks=new Set();
-      let debugMatches=d1.length;
-      d1.forEach(ev=>{(ev.bookmakers||[]).forEach(bk=>debugBooks.add(bk.key));});
-      const bkList=[...debugBooks].join(', ')||'NONE';
-      debugLog.push(`${sport.name}: ${debugMatches} games [${bkList}]`);
-      S.progress=`${sport.name}: ${debugMatches} games, books: ${bkList}`;render();
-      await new Promise(r=>setTimeout(r,1500));
+      // Show progress
+      S.progress=`Scanning ${sport.name}... (${si+1}/${SPORTS.length}) — ${d1.length} games found`;render();
 
       // 2) Fetch totals (separate call, may fail — that's ok)
       S.progress=`Scanning ${sport.name} (totals)... (${si+1}/${SPORTS.length})`;render();
@@ -245,7 +238,6 @@ async function fetchOdds(apiKey){
   const with2=allM.filter(m=>m.bkCount>=2).length;
   const with1=allM.filter(m=>m.bkCount===1).length;
   S.status=`✅ ${allM.length} matches found (${with2} with 2+ books, ${with1} with 1 book) • ${ac} arbs • Credits: ${S.creditsUsed} used`;
-  S.debugLog=debugLog.join(' | ');
   S.statusType='ok';S.progress='';
   localStorage.setItem('wizzy_key',apiKey);S.apiKey=apiKey;
   document.getElementById('scanText').textContent='LIVE';render();
@@ -352,7 +344,6 @@ function render(){
     </div>
     ${S.status||S.progress?`<div class="api-status ${S.statusType}">${S.loading?'<div class="spinner"></div>':''}${S.progress||S.status}${S.isLive?' <span class="live-tag">REAL DATA</span>':''}</div>`:''}
     ${S.creditsUsed>0?`<div class="credits-bar">Credits: ${S.creditsUsed}/${500} used <div class="credits-meter"><div class="credits-fill" style="width:${credPct}%;background:${credColor}"></div></div>${S.creditsRemaining} left</div>`:''}
-    ${S.debugLog?`<div style="font-size:10px;color:var(--gold);margin-top:8px;line-height:1.6;word-break:break-all">${S.debugLog}</div>`:''}
   </div>
 
   <div class="safety-info">⚽ <b>Smart Mode:</b> Scanning Pinnacle (sharp) vs 1XBet & Marathon (soft) — 🛡 3-Way + 📊 Over/Under + 🎯 Asian Handicap. All outcomes covered.</div>
