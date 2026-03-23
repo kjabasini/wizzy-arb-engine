@@ -189,79 +189,98 @@ try{localStorage.removeItem('wizzy_scans');}catch(e){}
 let S={apiKey:localStorage.getItem('wizzy_key')||'',bankroll:parseInt(localStorage.getItem('wizzy_bankroll'))||1000,league:'All',mktType:'all',minMargin:0,sel:null,matches:[],loading:false,status:'',statusType:'',creditsUsed:0,creditsRemaining:500,isLive:false,guideOpen:false,progress:''};
 document.getElementById('tog').onclick=()=>{const h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark'};
 
-// ═══════════ API: FETCH ONLY 3 BOOKMAKERS ═══════════
+// ═══════════ API: BLAZING FAST PARALLEL FETCH ═══════════
 async function fetchOdds(apiKey){
-  S.loading=true;S.matches=[];S.progress='Starting scan...';render();
+  S.loading=true;S.matches=[];S.progress='🚀 Launching all scans simultaneously...';render();
+  const startTime=Date.now();
+
+  // Track progress per sport
+  const sportStatus=SPORTS.map(s=>({name:s.name,status:'⏳',matches:0,arbs:0}));
   let allM=[];
-  // Using bookmakers param = only 1 region cost (≤10 books = 1 region)
-  const booksParam=MY_BOOKS.join(',');
+
+  function updateProgress(){
+    const done=sportStatus.filter(s=>s.status==='✅'||s.status==='❌'||s.status==='⚠️').length;
+    const totalArbs=allM.reduce((s,m)=>s+m.arbs.length,0);
+    const elapsed=((Date.now()-startTime)/1000).toFixed(1);
+    S.progress=`⚡ ${done}/${SPORTS.length} done in ${elapsed}s — ${allM.length} matches, ${totalArbs} arbs found so far`;
+    // Show live results as they come in
+    S.matches=[...allM];
+    render();
+  }
 
   async function safeFetch(url){
     const ctrl=new AbortController();
-    const timer=setTimeout(()=>ctrl.abort(),8000);
+    const timer=setTimeout(()=>ctrl.abort(),10000);
     try{const r=await fetch(url,{signal:ctrl.signal});clearTimeout(timer);return r;}
     catch(e){clearTimeout(timer);return null;}
   }
 
-  for(let si=0;si<SPORTS.length;si++){
-    const sport=SPORTS[si];
-    S.progress=`Scanning ${sport.name}... (${si+1}/${SPORTS.length})`;render();
+  function processSport(d1,d2,sport){
+    const matches=[];
+    const tMap={};
+    (d2||[]).forEach(ev=>{const t={};(ev.bookmakers||[]).forEach(bk=>{if(!MY_BOOKS.includes(bk.key))return;const mt=bk.markets.find(m=>m.key==='totals');if(!mt)return;mt.outcomes.forEach(o=>{if(!t[o.point])t[o.point]={};if(!t[o.point][bk.key])t[o.point][bk.key]={};t[o.point][bk.key][o.name.toLowerCase()]=o.price;});});tMap[ev.id]=t;});
+
+    (d1||[]).forEach(ev=>{
+      if(!ev.bookmakers||ev.bookmakers.length<2)return;
+      const h2h={},totals=tMap[ev.id]||{};
+      ev.bookmakers.forEach(bk=>{
+        if(!MY_BOOKS.includes(bk.key))return;
+        const mH=bk.markets.find(m=>m.key==='h2h');
+        if(mH){
+          const hO=mH.outcomes.find(o=>o.name===ev.home_team);
+          const aO=mH.outcomes.find(o=>o.name===ev.away_team);
+          const dO=mH.outcomes.find(o=>o.name==='Draw');
+          if(hO&&aO&&dO)h2h[bk.key]={home:hO.price,draw:dO.price,away:aO.price};
+        }
+      });
+      const filtTotals={};
+      Object.entries(totals).forEach(([pt,bks])=>{const f={};Object.entries(bks).forEach(([bk,v])=>{if(MY_BOOKS.includes(bk))f[bk]=v;});if(Object.keys(f).length>=2)filtTotals[pt]=f;});
+      const arbs=[...find3Way(h2h),...findTotals(filtTotals)];
+      const bkCount=Object.keys(h2h).length;
+      if(bkCount>=2)
+        matches.push({id:ev.id,league:sport.name,home:[ev.home_team,ev.home_team.substring(0,3).toUpperCase()],away:[ev.away_team,ev.away_team.substring(0,3).toUpperCase()],h2h,totals:filtTotals,spreads:{},arbs,kickoff:new Date(ev.commence_time),bkCount});
+    });
+    return matches;
+  }
+
+  // FIRE ALL REQUESTS AT ONCE
+  const jobs=SPORTS.map(async(sport,si)=>{
     try{
-      // Fetch h2h and totals IN PARALLEL (faster)
+      sportStatus[si].status='🔄';updateProgress();
       const [r1,r2]=await Promise.all([
         safeFetch(`${API_BASE}/sports/${sport.key}/odds?regions=eu,uk&oddsFormat=decimal&markets=h2h&apiKey=${apiKey}`),
         safeFetch(`${API_BASE}/sports/${sport.key}/odds?regions=eu,uk&oddsFormat=decimal&markets=totals&apiKey=${apiKey}`)
       ]);
 
-      if(!r1)continue;
-      if(!r1.ok){
-        if(r1.status===401){S.status='❌ Invalid API key.';S.statusType='err';S.loading=false;render();return}
-        if(r1.status===429){S.status='⏳ Rate limit — wait 1 min';S.statusType='err';S.loading=false;render();return}
-        continue;
+      if(!r1||!r1.ok){
+        if(r1&&r1.status===401){S.status='❌ Invalid API key.';S.statusType='err';S.loading=false;render();return;}
+        sportStatus[si].status='❌';updateProgress();return;
       }
-      S.creditsUsed=parseInt(r1.headers.get('x-requests-used'))||0;
-      S.creditsRemaining=parseInt(r1.headers.get('x-requests-remaining'))||0;
-      const d1=await r1.json();
+      S.creditsUsed=parseInt(r1.headers.get('x-requests-used'))||S.creditsUsed;
+      S.creditsRemaining=parseInt(r1.headers.get('x-requests-remaining'))||S.creditsRemaining;
 
+      const d1=await r1.json();
       let d2=[];
       if(r2&&r2.ok){d2=await r2.json();S.creditsUsed=parseInt(r2.headers.get('x-requests-used'))||S.creditsUsed;S.creditsRemaining=parseInt(r2.headers.get('x-requests-remaining'))||S.creditsRemaining;}
 
-      S.progress=`Scanning ${sport.name}... (${si+1}/${SPORTS.length}) — ${d1.length} games`;render();
+      const matches=processSport(d1,d2,sport);
+      allM.push(...matches);
+      sportStatus[si].status='✅';
+      sportStatus[si].matches=matches.length;
+      sportStatus[si].arbs=matches.reduce((s,m)=>s+m.arbs.length,0);
+      updateProgress();
+    }catch(e){
+      sportStatus[si].status='⚠️';updateProgress();
+    }
+  });
 
-      // Build totals map — ONLY YOUR 3 BOOKMAKERS
-      const tMap={};
-      d2.forEach(ev=>{const t={};ev.bookmakers.forEach(bk=>{if(!MY_BOOKS.includes(bk.key))return;const mt=bk.markets.find(m=>m.key==='totals');if(!mt)return;mt.outcomes.forEach(o=>{if(!t[o.point])t[o.point]={};if(!t[o.point][bk.key])t[o.point][bk.key]={};t[o.point][bk.key][o.name.toLowerCase()]=o.price;});});tMap[ev.id]=t;});
+  // Wait for ALL to finish
+  await Promise.all(jobs);
 
-      // Process h2h data — ONLY YOUR 3 BOOKMAKERS
-      d1.forEach(ev=>{
-        if(!ev.bookmakers||ev.bookmakers.length<2)return;
-        const h2h={},totals=tMap[ev.id]||{};
-        ev.bookmakers.forEach(bk=>{
-          if(!MY_BOOKS.includes(bk.key))return;
-          const mH=bk.markets.find(m=>m.key==='h2h');
-          if(mH){
-            const hO=mH.outcomes.find(o=>o.name===ev.home_team);
-            const aO=mH.outcomes.find(o=>o.name===ev.away_team);
-            const dO=mH.outcomes.find(o=>o.name==='Draw');
-            if(hO&&aO&&dO)h2h[bk.key]={home:hO.price,draw:dO.price,away:aO.price};
-          }
-        });
-        // Filter totals to only your 3 books too
-        const filtTotals={};
-        Object.entries(totals).forEach(([pt,bks])=>{const f={};Object.entries(bks).forEach(([bk,v])=>{if(MY_BOOKS.includes(bk))f[bk]=v;});if(Object.keys(f).length>=2)filtTotals[pt]=f;});
-        const arbs=[...find3Way(h2h),...findTotals(filtTotals)];
-        const bkCount=Object.keys(h2h).length;
-        if(bkCount>=2)
-          allM.push({id:ev.id,league:sport.name,home:[ev.home_team,ev.home_team.substring(0,3).toUpperCase()],away:[ev.away_team,ev.away_team.substring(0,3).toUpperCase()],h2h,totals:filtTotals,spreads:{},arbs,kickoff:new Date(ev.commence_time),bkCount});
-      });
-    }catch(e){console.error(e)}
-  }
+  const elapsed=((Date.now()-startTime)/1000).toFixed(1);
   S.matches=allM;S.isLive=true;S.loading=false;
   const ac=allM.reduce((s,m)=>s+m.arbs.length,0);
-  const with2=allM.filter(m=>m.bkCount>=2).length;
-  const with1=allM.filter(m=>m.bkCount===1).length;
-
-  S.status=`✅ ${allM.length} matches • ${ac} arbs found • Credits: ${S.creditsUsed} used`;
+  S.status=`⚡ Done in ${elapsed}s — ${allM.length} matches • ${ac} arbs • Credits: ${S.creditsUsed} used`;
   S.statusType='ok';S.progress='';
   localStorage.setItem('wizzy_key',apiKey);S.apiKey=apiKey;
   document.getElementById('scanText').textContent='LIVE';render();
