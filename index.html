@@ -183,6 +183,9 @@ const SPORTS=[
   {key:'upcoming',name:'Next 8 (All Sports)'}
 ];
 
+// Clean up old broken saved data
+try{localStorage.removeItem('wizzy_scans');}catch(e){}
+
 let S={apiKey:localStorage.getItem('wizzy_key')||'',bankroll:parseInt(localStorage.getItem('wizzy_bankroll'))||1000,league:'All',mktType:'all',minMargin:0,sel:null,matches:[],loading:false,status:'',statusType:'',creditsUsed:0,creditsRemaining:500,isLive:false,guideOpen:false,progress:''};
 document.getElementById('tog').onclick=()=>{const h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark'};
 
