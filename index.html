@@ -254,7 +254,6 @@ async function fetchOdds(apiKey){
         if(bkCount>=2)
           allM.push({id:ev.id,league:sport.name,home:[ev.home_team,ev.home_team.substring(0,3).toUpperCase()],away:[ev.away_team,ev.away_team.substring(0,3).toUpperCase()],h2h,totals:filtTotals,spreads:{},arbs,kickoff:new Date(ev.commence_time),bkCount});
       });
-      });
     }catch(e){console.error(e)}
   }
   S.matches=allM;S.isLive=true;S.loading=false;
