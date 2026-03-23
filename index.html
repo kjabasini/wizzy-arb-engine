@@ -196,6 +196,13 @@ async function fetchOdds(apiKey){
       S.creditsRemaining=parseInt(r1.headers.get('x-requests-remaining'))||0;
       const d1=await r1.json();
 
+      // DEBUG: Track what the API actually returns
+      let debugBooks=new Set();
+      let debugMatches=d1.length;
+      d1.forEach(ev=>{(ev.bookmakers||[]).forEach(bk=>debugBooks.add(bk.key));});
+      S.progress=`${sport.name}: ${debugMatches} games, bookmakers found: ${[...debugBooks].join(', ')||'NONE'}`;render();
+      await new Promise(r=>setTimeout(r,2000)); // pause so you can read it
+
       // 2) Fetch totals (separate call, may fail — that's ok)
       S.progress=`Scanning ${sport.name} (totals)... (${si+1}/${SPORTS.length})`;render();
       let d2=[];
@@ -221,14 +228,18 @@ async function fetchOdds(apiKey){
           }
         });
         const arbs=[...find3Way(h2h),...findTotals(totals)];
-        if(Object.keys(h2h).length>=2)
-          allM.push({id:ev.id,league:sport.name,home:[ev.home_team,ev.home_team.substring(0,3).toUpperCase()],away:[ev.away_team,ev.away_team.substring(0,3).toUpperCase()],h2h,totals,spreads,arbs,kickoff:new Date(ev.commence_time)});
+        const bkCount=Object.keys(h2h).length;
+        // Show match even with 1 book for debugging
+        if(bkCount>=1)
+          allM.push({id:ev.id,league:sport.name,home:[ev.home_team,ev.home_team.substring(0,3).toUpperCase()],away:[ev.away_team,ev.away_team.substring(0,3).toUpperCase()],h2h,totals,spreads:{},arbs,kickoff:new Date(ev.commence_time),bkCount});
       });
     }catch(e){console.error(e)}
   }
   S.matches=allM;S.isLive=true;S.loading=false;
   const ac=allM.reduce((s,m)=>s+m.arbs.length,0);
-  S.status=`✅ ${allM.length} matches scanned • ${ac} arbs found • 3 books only`;
+  const with2=allM.filter(m=>m.bkCount>=2).length;
+  const with1=allM.filter(m=>m.bkCount===1).length;
+  S.status=`✅ ${allM.length} matches found (${with2} with 2+ books, ${with1} with only 1 book) • ${ac} arbs • Credits: ${S.creditsUsed} used`;
   S.statusType='ok';S.progress='';
   localStorage.setItem('wizzy_key',apiKey);S.apiKey=apiKey;
   document.getElementById('scanText').textContent='LIVE';render();
