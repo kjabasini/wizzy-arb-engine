@@ -243,8 +243,8 @@ async function fetchOdds(apiKey){
     return matches;
   }
 
-  // FIRE ALL REQUESTS AT ONCE
-  const jobs=SPORTS.map(async(sport,si)=>{
+  // BATCH: 3 sports at a time (avoids rate limit)
+  async function scanSport(sport,si){
     try{
       sportStatus[si].status='🔄';updateProgress();
       const [r1,r2]=await Promise.all([
@@ -253,7 +253,8 @@ async function fetchOdds(apiKey){
       ]);
 
       if(!r1||!r1.ok){
-        if(r1&&r1.status===401){S.status='❌ Invalid API key.';S.statusType='err';S.loading=false;render();return;}
+        if(r1&&r1.status===401){S.status='❌ Invalid API key.';S.statusType='err';S.loading=false;render();return 'stop';}
+        if(r1&&r1.status===429){sportStatus[si].status='⏳';updateProgress();return 'ratelimit';}
         sportStatus[si].status='❌';updateProgress();return;
       }
       S.creditsUsed=parseInt(r1.headers.get('x-requests-used'))||S.creditsUsed;
@@ -272,10 +273,16 @@ async function fetchOdds(apiKey){
     }catch(e){
       sportStatus[si].status='⚠️';updateProgress();
     }
-  });
+  }
 
-  // Wait for ALL to finish
-  await Promise.all(jobs);
+  // Process in batches of 3
+  for(let b=0;b<SPORTS.length;b+=3){
+    const batch=SPORTS.slice(b,b+3);
+    const results=await Promise.all(batch.map((sport,i)=>scanSport(sport,b+i)));
+    if(results.includes('stop'))return;
+    // Small delay between batches to avoid rate limit
+    if(b+3<SPORTS.length)await new Promise(r=>setTimeout(r,500));
+  }
 
   const elapsed=((Date.now()-startTime)/1000).toFixed(1);
   S.matches=allM;S.isLive=true;S.loading=false;
