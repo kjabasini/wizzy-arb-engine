@@ -183,7 +183,15 @@ const SPORTS=[
   {key:'upcoming',name:'Next 8 (All Sports)'}
 ];
 
-let S={apiKey:localStorage.getItem('wizzy_key')||'',bankroll:1000,league:'All',mktType:'all',minMargin:0,sel:null,matches:[],loading:false,status:'',statusType:'',creditsUsed:0,creditsRemaining:500,isLive:false,guideOpen:true,progress:''};
+let savedScans=JSON.parse(localStorage.getItem('wizzy_scans')||'[]');
+let S={apiKey:localStorage.getItem('wizzy_key')||'',bankroll:parseInt(localStorage.getItem('wizzy_bankroll'))||1000,league:'All',mktType:'all',minMargin:0,sel:null,matches:[],loading:false,status:'',statusType:'',creditsUsed:0,creditsRemaining:500,isLive:false,guideOpen:false,progress:'',showSaved:false};
+
+// Load last scan if exists
+if(savedScans.length>0){
+  const last=savedScans[savedScans.length-1];
+  S.matches=last.matches||[];S.isLive=false;
+  S.status=`📂 Loaded saved scan from ${new Date(last.date).toLocaleString()} — ${last.matches.length} matches, ${last.arbCount} arbs`;S.statusType='ok';
+}
 document.getElementById('tog').onclick=()=>{const h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark'};
 
 // ═══════════ API: FETCH ONLY 3 BOOKMAKERS ═══════════
@@ -258,7 +266,15 @@ async function fetchOdds(apiKey){
   const ac=allM.reduce((s,m)=>s+m.arbs.length,0);
   const with2=allM.filter(m=>m.bkCount>=2).length;
   const with1=allM.filter(m=>m.bkCount===1).length;
-  S.status=`✅ ${allM.length} matches with your 3 books • ${ac} arbs found • Credits: ${S.creditsUsed} used`;
+
+  // AUTO-SAVE this scan
+  const scanRecord={date:new Date().toISOString(),matches:allM,arbCount:ac,matchCount:allM.length,credits:S.creditsUsed};
+  savedScans.push(scanRecord);
+  // Keep only last 10 scans
+  if(savedScans.length>10)savedScans=savedScans.slice(-10);
+  try{localStorage.setItem('wizzy_scans',JSON.stringify(savedScans));}catch(e){console.log('Storage full, clearing old scans');savedScans=[scanRecord];localStorage.setItem('wizzy_scans',JSON.stringify(savedScans));}
+
+  S.status=`✅ ${allM.length} matches • ${ac} arbs found • AUTO-SAVED ✓ • Credits: ${S.creditsUsed} used`;
   S.statusType='ok';S.progress='';
   localStorage.setItem('wizzy_key',apiKey);S.apiKey=apiKey;
   document.getElementById('scanText').textContent='LIVE';render();
@@ -367,6 +383,32 @@ function render(){
     ${S.creditsUsed>0?`<div class="credits-bar">Credits: ${S.creditsUsed}/${500} used <div class="credits-meter"><div class="credits-fill" style="width:${credPct}%;background:${credColor}"></div></div>${S.creditsRemaining} left</div>`:''}
   </div>
 
+  <!-- SAVED SCANS -->
+  ${savedScans.length>0?`
+  <div class="g" style="border-radius:var(--radius);padding:14px;margin-bottom:14px">
+    <div class="sh"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div style="font-size:10px;color:var(--dim);letter-spacing:1.2px;font-weight:500">💾 SAVED SCANS (${savedScans.length})</div>
+      <button class="api-btn demo" id="clearScans" style="padding:4px 10px;font-size:9px">🗑 Clear All</button>
+    </div>
+    <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;-ms-overflow-style:none;scrollbar-width:none">
+      ${savedScans.map((sc,i)=>{
+        const d=new Date(sc.date);
+        const isActive=S.matches.length>0&&S.matches===sc.matches;
+        return`<button class="fbtn ${isActive?'a':''}" data-scan="${i}" style="min-width:fit-content;padding:6px 12px">
+          <div style="font-size:10px;font-weight:600">${d.toLocaleDateString('en-US',{month:'short',day:'numeric'})} ${d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})}</div>
+          <div style="font-size:9px;opacity:.7">${sc.matchCount} matches • ${sc.arbCount} arbs</div>
+        </button>`;
+      }).join('')}
+    </div>
+  </div>`:''}
+
+  <!-- QUICK BANKROLL BUTTONS -->
+  <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">
+    <div style="font-size:10px;color:var(--dim);display:flex;align-items:center;margin-right:4px">💰 BANKROLL:</div>
+    ${[1000,5000,10000,50000,100000].map(v=>`<button class="fbtn ${S.bankroll===v?'a':''}" data-br="${v}" style="padding:6px 12px;font-size:11px">$${v>=1000?Math.floor(v/1000)+'K':v}</button>`).join('')}
+  </div>
+
   <div class="safety-info">🏆 <b>Smart Mode:</b> Pinnacle (sharp) vs 1XBet & Marathon (soft) — All sports, all safe markets. Football: 3-Way + O/U. Basketball/Tennis/Others: 2-Way + O/U. All outcomes covered.</div>
 
   <div class="stats">
@@ -464,16 +506,22 @@ function render(){
     }
   });
 
-  h+=`</div><div class="footer">Wizzy Arb Engine v7.0 — All Sports Edition<br>Pinnacle • 1XBet • Marathon — Football, NBA, Tennis, NHL, MLB, MMA & more<br>${S.isLive?'Real odds from The Odds API':'Demo data'} • Powered by Claude AI</div>`;
+  h+=`</div><div class="footer">Wizzy Arb Engine v8.0 — All Sports + Auto-Save<br>Pinnacle • 1XBet • Marathon — Football, NBA, Tennis, NHL, MLB, MMA & more<br>${S.isLive?'Real odds from The Odds API':'Demo data'} • Powered by Claude AI</div>`;
 
   document.getElementById('app').innerHTML=h;
   document.getElementById('goBtn').onclick=()=>{const k=document.getElementById('apiKeyInput').value.trim();if(!k){S.status='👆 Paste API key first';S.statusType='err';render();return}fetchOdds(k)};
   document.getElementById('demoBtn').onclick=()=>loadDemo();
   document.getElementById('apiKeyInput').onkeydown=e=>{if(e.key==='Enter')document.getElementById('goBtn').click()};
   document.getElementById('toggleGuide').onclick=e=>{e.stopPropagation();S.guideOpen=!S.guideOpen;render()};
-  const bi=document.getElementById('bi');if(bi)bi.oninput=e=>{S.bankroll=+e.target.value||0;render()};
+  const bi=document.getElementById('bi');if(bi)bi.oninput=e=>{S.bankroll=+e.target.value||0;localStorage.setItem('wizzy_bankroll',S.bankroll);render()};
   document.querySelectorAll('.fbtn[data-l]').forEach(b=>b.onclick=()=>{S.league=b.dataset.l;S.sel=null;render()});
   document.querySelectorAll('.fbtn[data-m]').forEach(b=>b.onclick=()=>{S.mktType=b.dataset.m;S.sel=null;render()});
+  // Bankroll presets
+  document.querySelectorAll('.fbtn[data-br]').forEach(b=>b.onclick=()=>{S.bankroll=+b.dataset.br;localStorage.setItem('wizzy_bankroll',S.bankroll);render()});
+  // Load saved scan
+  document.querySelectorAll('.fbtn[data-scan]').forEach(b=>b.onclick=()=>{const i=+b.dataset.scan;const sc=savedScans[i];if(sc){S.matches=sc.matches;S.isLive=false;S.status=`📂 Loaded scan from ${new Date(sc.date).toLocaleString()} — ${sc.matchCount} matches, ${sc.arbCount} arbs`;S.statusType='ok';render();}});
+  // Clear saved scans
+  const clrBtn=document.getElementById('clearScans');if(clrBtn)clrBtn.onclick=e=>{e.stopPropagation();if(confirm('Delete all saved scans?')){savedScans=[];localStorage.removeItem('wizzy_scans');render();}};
   const ms=document.getElementById('ms');if(ms)ms.oninput=e=>{S.minMargin=+e.target.value;S.sel=null;render()};
   document.querySelectorAll('.acard').forEach(c=>c.onclick=()=>{const k=c.dataset.k;S.sel=S.sel===k?null:k;render()});
 }
